@@ -35,7 +35,7 @@ async def startup_event():
     global rag_agent
     # TODO: Initialize the RAG agent
     # Hint: Use create_rag_agent() function
-    # rag_agent = create_rag_agent()
+    rag_agent = create_rag_agent()
     print(f"🚀 {settings.app_name} starting up...")
     print("⚠️  TODO: Initialize RAG agent in startup_event()")
 
@@ -78,14 +78,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
     """
     # TODO: Implement chat endpoint
     # Example structure:
-    # try:
-    #     result = await rag_agent.chat(
-    #         query=request.query,
-    #         session_id=request.session_id
-    #     )
-    #     return ChatResponse(**result)
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
+    try:
+         result = await rag_agent.chat(
+             query=request.query,
+             session_id=request.session_id
+         )
+         return ChatResponse(**result)
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
+
 
     raise HTTPException(
         status_code=501,
