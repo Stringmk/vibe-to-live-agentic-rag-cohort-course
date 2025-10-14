@@ -9,9 +9,10 @@ Learning Objectives:
 - Implement semantic search with FastEmbed
 - Format and return search results
 """
-
 import os
 from qdrant_client import QdrantClient, models
+from pydantic_settings import BaseSettings
+
 
 
 class VectorSearchTool:
@@ -30,7 +31,8 @@ class VectorSearchTool:
 
     def __init__(
         self, 
-        qdrant_url: str = None, 
+        #settings: BaseSettings = get_settings(),
+        qdrant_url: str = None,
         qdrant_api_key: str = None,
         collection_name: str = None,
         model_name: str = "BAAI/bge-small-en"
@@ -39,37 +41,28 @@ class VectorSearchTool:
         Initialize Qdrant client with FastEmbed support.
         
         Args:
+            settings: Application settings (default loads from environment)
             qdrant_url: Qdrant server URL (defaults to QDRANT_URL env var)
             qdrant_api_key: Qdrant API key (defaults to QDRANT_API_KEY env var)
             collection_name: Name of the collection (defaults to 'fed_speeches')
             model_name: FastEmbed model name (defaults to 'BAAI/bge-small-en')
         """
-        # TODO 1: Get credentials from environment variables or use provided parameters
-        # Hint: Use os.getenv("VARIABLE_NAME") to read environment variables
-        # Hint: Use the 'or' operator to fallback to parameters if env var is not set
-        # Example: self.qdrant_url = qdrant_url or os.getenv("QDRANT_URL")
-        
-        self.qdrant_url = None  # TODO: Replace with actual implementation
-        self.qdrant_api_key = None  # TODO: Replace with actual implementation
-        
-        # TODO 2: Validate that both URL and API key are provided
-        # Hint: Check if either is None or empty, then raise ValueError
-        # Hint: Use an if statement to check: if not self.qdrant_url or not self.qdrant_api_key:
-        
-        # TODO: Add validation here
-        
+        #self.settings = settings
+        # TODO 1: Load Qdrant URL and API key from parameters or environment variables
+        self.qdrant_url = qdrant_url or os.getenv('QDRANT_URL')
+        self.qdrant_api_key = qdrant_api_key or os.getenv('QDRANT_API_KEY')
+
+        # TODO 2: Validate that URL and API key are provided
+        if not self.qdrant_url or not self.qdrant_api_key:
+            raise ValueError("QDRANT_URL and QDRANT_API_KEY must be provided")
+
+
         # TODO 3: Initialize the Qdrant client
-        # Hint: Create a QdrantClient instance with url and api_key parameters
-        # Example: self.qdrant_client = QdrantClient(url=..., api_key=...)
-        
-        self.qdrant_client = None  # TODO: Replace with actual QdrantClient initialization
-        
-        # TODO 4: Set collection name and model name with defaults
-        # Hint: Use the same pattern as above - use provided value or default
-        # Default collection_name: "fed_speeches"
-        # Default model_name is already set in the function signature
-        
-        self.collection_name = None  # TODO: Replace with actual implementation
+        self.qdrant_client = QdrantClient(url=self.qdrant_url, 
+                                          api_key=self.qdrant_api_key)
+       
+        # TODO 4: Set collection name and model name with default
+        self.collection_name = collection_name or "fed_speeches"
         self.model_name = model_name
 
     def search(self, query: str, limit: int = 5) -> list[dict]:
@@ -87,25 +80,36 @@ class VectorSearchTool:
             - score: Similarity score
         """
         # TODO 5: Perform search using Qdrant's query_points method
-        # Hint: Use self.qdrant_client.query_points() with the following parameters:
-        #   - collection_name: self.collection_name
-        #   - query: models.Document(text=query, model=self.model_name)
-        #   - limit: limit
-        # Hint: The result has a .points attribute that contains the list of results
-        # Example: results = self.qdrant_client.query_points(...).points
-        
-        search_results = []  # TODO: Replace with actual query_points call
-        
+        results = self.qdrant_client.query_points(
+            collection_name=self.collection_name,
+            query=models.Document(text=query, model=self.model_name),
+            limit=limit
+        ).points
+
+        search_results = results
+
+        #if not search_results:
+        #    raise ValueError(f"No results found for query: '{query}'")
+
         # TODO 6: Format results into a list of dictionaries
-        # Hint: Loop through search_results and extract information
-        # Hint: Each result has .payload (dict) and .score (float) attributes
-        # Hint: Use result.payload.get("key", "") to safely get values with defaults
-        
         formatted_results = []
-        # TODO: Add your loop here to format results
-        # Each formatted result should be a dict with keys: "content", "metadata", "score"
-        # metadata should include: title, speaker, pub_date, category, url, description
-        
+        for result in search_results:
+            formatted_results.append({
+                "id": result.id,
+                "content": result.payload.get("document", ""),
+                "metadata": {
+                    "title": result.payload.get("title", ""),
+                    "speaker": result.payload.get("speaker", ""),
+                    "url": result.payload.get("url", ""),
+                    "description": result.payload.get("description", ""),
+                    "pub_date": result.payload.get("pub_date", ""),
+                    "category": result.payload.get("category", ""),
+                    "content_length": result.payload.get("content_length", 0),
+                    "scraped_at": result.payload.get("scraped_at", "")
+                },
+                "score": result.score
+            })
+
         return formatted_results
 
     def verify_collection(self) -> dict:
@@ -116,16 +120,16 @@ class VectorSearchTool:
             Dictionary with collection information
         """
         # TODO 7: Try to get collection info and handle errors
-        # Hint: Use a try/except block
-        # Hint: Call self.qdrant_client.get_collection(self.collection_name)
-        # Hint: If successful, return a dict with exists=True and collection info
-        # Hint: If an exception occurs, return a dict with exists=False and error message
         
         try:
             # TODO: Call get_collection and extract info
-            # collection_info = ...
-            # Return dict with: exists, points_count, vector_size, distance
-            pass
+            collection_info = self.qdrant_client.get_collection(self.collection_name)
+            return {
+                "exists": True,
+                "points_count": collection_info.points_count,
+                "vector_size": collection_info.config.params.vectors.size,
+                "distance": collection_info.config.params.vectors.distance
+            }   
         except Exception as e:
             # TODO: Return error dict
             return {
@@ -154,23 +158,36 @@ def search_knowledge_base(query: str, limit: int = 5) -> str:
     
     try:
         # TODO: Create VectorSearchTool instance
-        # tool = VectorSearchTool()
+        tool = VectorSearchTool()
         
         # TODO: Perform search
-        # results = tool.search(query, limit=limit)
+        results = tool.search(query, limit=limit)
         
         # TODO: Check if results are empty
-        # if not results:
-        #     return f"No results found for query: '{query}'"
+        if not results:
+            return f"No results found for query: '{query}'"
         
         # TODO: Format results as a readable string
         # Include: number of documents, and for each result:
         #   - Result number and score
         #   - Title, Speaker, Date, Category
         #   - Content snippet (first 300 characters)
-        
-        return "TODO: Implement search_knowledge_base"
-        
+        formatted_results = []  
+        for i, res in enumerate(results):
+            
+            formatted_results.append(
+                f"Result: {i+1} \n"
+                f"Id: {res['id']}\n"
+                f"Score: {res['score']:.4f}:\n"
+                f"Title: {res['metadata']['title']}\n"
+                f"Speaker: {res['metadata']['speaker']}\n"
+                f"Date: {res['metadata']['pub_date']}\n"
+                f"Category: {res['metadata']['category']}\n"
+                f"Content Snippet: {res['content'][:300]}...\n"
+            )
+            
+        return f"Found {len(results)} relevant documents:\n\n" + "\n".join(formatted_results)
+
     except Exception as e:
         return f"Error searching knowledge base: {str(e)}"
 
