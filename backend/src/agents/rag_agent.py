@@ -78,7 +78,9 @@ class RAGAgent:
                 3. Use the `search_knowledge_base_tool` tool to retrieve information for each of the generated queries.
                 4. Synthesize the information retrieved from the `search_knowledge_base_tool` tool calls to formulate a comprehensive response. Do not use a source with the same title multiple times.
                 5. Provide the final answer 
-                6. If you are unable to find relevant information, respond with "I don't know."
+                6. If you are unable to find relevant information, respond with "I am unable to answer that question."
+                7. If the question is not related to the knowledge base, respond with "I am unable to answer that question."
+                8. If the question is inappropriate, respond with "I am unable to answer that question."
 
                 """,
                 model=self.model,
