@@ -4,9 +4,17 @@ FastAPI application for Agentic RAG API.
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic_settings import BaseSettings
 
 from .agents.rag_agent import create_rag_agent
 from .schemas.requests import ChatRequest, ChatResponse, HealthResponse
+
+class Settings(BaseSettings):
+    app_name: str = "Agentic RAG API"
+    debug: bool = True
+
+
+settings = Settings()
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -26,8 +34,7 @@ app.add_middleware(
 )
 
 # Initialize RAG agent (lazy loading in production would be better)
-rag_agent = None
-
+#rag_agent = RagAgent()
 
 @app.on_event("startup")
 async def startup_event():
@@ -36,6 +43,7 @@ async def startup_event():
     # TODO: Initialize the RAG agent
     # Hint: Use create_rag_agent() function
     rag_agent = create_rag_agent()
+    
     print(f"🚀 {settings.app_name} starting up...")
     print("⚠️  TODO: Initialize RAG agent in startup_event()")
 
@@ -79,11 +87,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
     # TODO: Implement chat endpoint
     # Example structure:
     try:
-         result = await rag_agent.chat(
-             query=request.query,
-             session_id=request.session_id
-         )
-         return ChatResponse(**result)
+        result = await rag_agent.chat(
+            query=request.query,
+            session_id=request.session_id
+        )
+        print(f"RAG Agent response: {result}")
+        return ChatResponse(**result)
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 

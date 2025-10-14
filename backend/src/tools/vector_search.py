@@ -11,8 +11,9 @@ Learning Objectives:
 """
 import os
 from qdrant_client import QdrantClient, models
-from src.core.config import get_settings
 from pydantic_settings import BaseSettings
+
+
 
 class VectorSearchTool:
     """
@@ -30,7 +31,7 @@ class VectorSearchTool:
 
     def __init__(
         self, 
-        settings: BaseSettings = get_settings(),
+        #settings: BaseSettings = get_settings(),
         qdrant_url: str = None,
         qdrant_api_key: str = None,
         collection_name: str = None,
@@ -46,16 +47,15 @@ class VectorSearchTool:
             collection_name: Name of the collection (defaults to 'fed_speeches')
             model_name: FastEmbed model name (defaults to 'BAAI/bge-small-en')
         """
-        self.settings = settings
+        #self.settings = settings
         # TODO 1: Load Qdrant URL and API key from parameters or environment variables
-        self.qdrant_url = qdrant_url or settings.QDRANT_URL
-        self.qdrant_api_key = qdrant_api_key or settings.QDRANT_API_KEY
+        self.qdrant_url = qdrant_url or os.getenv('QDRANT_URL')
+        self.qdrant_api_key = qdrant_api_key or os.getenv('QDRANT_API_KEY')
 
         # TODO 2: Validate that URL and API key are provided
-        if not self.qdrant_url:
-            raise ValueError("Qdrant URL must be provided")
-        if not self.qdrant_api_key:
-            raise ValueError("Qdrant API key must be provided")
+        if not self.qdrant_url or not self.qdrant_api_key:
+            raise ValueError("QDRANT_URL and QDRANT_API_KEY must be provided")
+
 
         # TODO 3: Initialize the Qdrant client
         self.qdrant_client = QdrantClient(url=self.qdrant_url, 
@@ -88,27 +88,28 @@ class VectorSearchTool:
 
         search_results = results
 
-        if not search_results:
-            raise ValueError(f"No results found for query: '{query}'")
+        #if not search_results:
+        #    raise ValueError(f"No results found for query: '{query}'")
 
         # TODO 6: Format results into a list of dictionaries
         formatted_results = []
         for result in search_results:
             formatted_results.append({
-                "content": result.payload.get("content", ""),
+                "id": result.id,
+                "content": result.payload.get("document", ""),
                 "metadata": {
                     "title": result.payload.get("title", ""),
                     "speaker": result.payload.get("speaker", ""),
                     "url": result.payload.get("url", ""),
                     "description": result.payload.get("description", ""),
-                    "category": result.payload.get("category", ""),
                     "pub_date": result.payload.get("pub_date", ""),
+                    "category": result.payload.get("category", ""),
                     "content_length": result.payload.get("content_length", 0),
-                    "scraped_at": result.payload.get("scraped_at", ""),
+                    "scraped_at": result.payload.get("scraped_at", "")
                 },
                 "score": result.score
             })
-        
+
         return formatted_results
 
     def verify_collection(self) -> dict:
@@ -126,8 +127,8 @@ class VectorSearchTool:
             return {
                 "exists": True,
                 "points_count": collection_info.points_count,
-                "vector_size": collection_info.vector_size,
-                "distance": collection_info.distance
+                "vector_size": collection_info.config.params.vectors.size,
+                "distance": collection_info.config.params.vectors.distance
             }   
         except Exception as e:
             # TODO: Return error dict
@@ -173,8 +174,11 @@ def search_knowledge_base(query: str, limit: int = 5) -> str:
         #   - Content snippet (first 300 characters)
         formatted_results = []  
         for i, res in enumerate(results):
+            
             formatted_results.append(
-                f"Result {i+1} (Score: {res['score']:.4f}):\n"
+                f"Result: {i+1} \n"
+                f"Id: {res['id']}\n"
+                f"Score: {res['score']:.4f}:\n"
                 f"Title: {res['metadata']['title']}\n"
                 f"Speaker: {res['metadata']['speaker']}\n"
                 f"Date: {res['metadata']['pub_date']}\n"
@@ -182,7 +186,7 @@ def search_knowledge_base(query: str, limit: int = 5) -> str:
                 f"Content Snippet: {res['content'][:300]}...\n"
             )
             
-        return f"Found {len(results)} documents:\n\n" + "\n".join(formatted_results)
+        return f"Found {len(results)} relevant documents:\n\n" + "\n".join(formatted_results)
 
     except Exception as e:
         return f"Error searching knowledge base: {str(e)}"

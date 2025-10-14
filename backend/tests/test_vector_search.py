@@ -148,6 +148,7 @@ class TestVectorSearchToolSearch:
         
         # Check first result structure
         first_result = results[0]
+        print('First result: ', first_result)
         assert first_result["score"] == 0.95
         assert "monetary policy" in first_result["content"]
         assert first_result["metadata"]["title"] == "Fed Speech 1"
@@ -196,7 +197,7 @@ class TestVectorSearchToolSearch:
         
         tool = VectorSearchTool()
         results = tool.search("test query")
-        
+        TestVectorSearchToolSearch.test_search_returns_formatted_results
         assert results == []
     
     def test_search_handles_missing_payload_fields(
