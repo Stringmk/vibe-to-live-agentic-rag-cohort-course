@@ -1,7 +1,7 @@
 """
 FastAPI application for Agentic RAG API.
 """
-
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings
@@ -97,13 +97,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
          raise HTTPException(status_code=500, detail=str(e))
 
 
-    raise HTTPException(
-        status_code=501,
-        detail="TODO: Implement /chat endpoint - this is your Week 1 assignment!",
-    )
-
 
 if __name__ == "__main__":
-    import uvicorn
+
 
     uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=settings.debug)

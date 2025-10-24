@@ -59,3 +59,9 @@ class HealthResponse(BaseModel):
     status: str = Field(default="healthy", description="Health status of the service")
 
     version: str = Field(default="0.1.0", description="API version")
+
+
+
+class AgentResponse(BaseModel):
+    answer: str
+    sources: list[str]

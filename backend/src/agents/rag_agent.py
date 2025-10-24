@@ -4,7 +4,7 @@ import re
 
 from agents import Agent, Runner, OpenAIChatCompletionsModel, set_tracing_disabled, function_tool, ModelSettings
 from agents.extensions.handoff_prompt import RECOMMENDED_PROMPT_PREFIX
-from ..schemas.requests import ChatRequest, ChatResponse
+from ..models.models import ChatRequest, ChatResponse, AgentResponse
 from agents.items import ToolCallOutputItem, RunItem
 import pandas as pd
 
@@ -13,6 +13,23 @@ from ..tools.vector_search import search_knowledge_base
 import os
 
 set_tracing_disabled(True)
+
+from phoenix.otel import register
+from openinference.semconv.trace import SpanAttributes
+from openinference.instrumentation import OITracer
+from opentelemetry.trace import StatusCode
+
+
+
+tracer_provider = register(
+  project_name="fast_api_agent",
+  auto_instrument=True,
+  batch=True
+)
+
+tracer: OITracer = tracer_provider.get_tracer(instrumenting_module_name = "opentelemetry.instrumentation.agents")
+
+
 
 import logging
 from typing import Any, List, Dict
@@ -64,38 +81,38 @@ class RAGAgent:
             str: The agent's response.
         """
         try:
-            agent = Agent(
-                name="FedSpeechAgent",
-                instructions=f"""
-                {RECOMMENDED_PROMPT_PREFIX}
-                You are a helpful assistant that synthesizes information from multiple sources
-                to provide a comprehensive answer to the user's question.
-            
-                Think step by step:
 
-                1. User will enter a question in natural language.
-                2. Understand the question and generate 3 search queries that would help find relevant information.
-                3. Use the `search_knowledge_base_tool` tool to retrieve information for each of the generated queries.
-                4. Synthesize the information retrieved from the `search_knowledge_base_tool` tool calls to formulate a comprehensive response. Do not use a source with the same title multiple times.
-                5. Provide the final answer 
-                6. If you are unable to find relevant information, respond with "I am unable to answer that question."
-                7. If the question is not related to the knowledge base, respond with "I am unable to answer that question."
-                8. If the question is inappropriate, respond with "I am unable to answer that question."
+            prompt = RECOMMENDED_PROMPT_PREFIX + """
+            User Query: {query}
+            Answer the user's query based on the knowledge base search results.
+            Provide the answer in a concise manner. Always include the sources used to generate the answer.
+            """.format(query=query)
 
-                """,
-                model=self.model,
-                tools=[self.search_knowledge_base_tool],
-                model_settings=ModelSettings(tool_choice="required")
-            )
 
-            response = await Runner.run(agent, query)
-            result = response.final_output
-            sources = []
-            for item in response.new_items:
-                item_sources = self._extract_sources([item])
-                sources.extend(item_sources)
-            chat_response = {"answer": result, "sources": sources, "session_id": session_id}
-            return chat_response
+            with tracer.start_as_current_span(
+                    "fed_speech_rag_agent",
+                    openinference_span_kind="chain"
+                ) as span:
+                    try:
+                        span.set_attribute(SpanAttributes.INPUT_VALUE, query)
+
+                        agent = Agent(
+                            name="FedSpeechAgent",
+                            instructions=prompt,
+                            model=self.model,
+                            tools=[self.search_knowledge_base_tool],
+                            model_settings=ModelSettings(tool_choice="search_knowledge_base_tool"),
+                            output_type = AgentResponse
+                        )
+                        result = await Runner.run(agent, prompt)
+                        span.set_attribute(SpanAttributes.OUTPUT_VALUE, str(result.final_output))
+                        span.set_status(StatusCode.OK)
+                        return result.final_output
+                    except Exception as e:
+                        span.set_attribute(SpanAttributes.OUTPUT_VALUE, f"Error: {str(e)}")
+                        span.set_status(StatusCode.ERROR)
+                        return AgentResponse(answer=f"Error: {str(e)}", sources=[])
+
         
         except Exception as e:
             logging.error(f"RAGAgent chat error: {e}")
